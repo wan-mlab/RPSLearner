@@ -69,7 +69,7 @@ def process_fold(fold_id, train_index, test_index, X, y, **kwargs):
         ('lightgbm', get_lightGBM_model()),
         ('catboost', get_catboost_model()),
         ('xgboost', get_xgb_model()),
-        ('nn', SimpleNNClassifier(input_dim=input_dim, output_dim=1, epochs=1000, batch_size=64, learning_rate=1e-4)),
+        ('nn', SimpleNNClassifier(input_dim=input_dim, output_dim=1, epochs=200, batch_size=64, learning_rate=1e-4)),
     ]
 
     meta_model_choice = kwargs.get('meta_model', "nn")
