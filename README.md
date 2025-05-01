@@ -19,6 +19,6 @@ data = pd.read_csv('data/rnaseq_tcga.csv')
 tpm = data.drop('Subtype', axis=1)
 subtype = data['Subtype'] # Use '0' for LUAD, and '1' for LUSC
 
-metrics = RPSLearner(
+metrics, y_probs, y_labels = RPSLearner(
     tpm.values, subtype, n_jobs=5)
 ```
