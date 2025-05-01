@@ -217,4 +217,4 @@ def RPSLearner(X, y, **kwargs):
     metrics = evaluate_models_predict(y_true, y_probs)
 
     print("Metrics:", metrics)
-    return metrics
+    return metrics, y_label, y_probs
