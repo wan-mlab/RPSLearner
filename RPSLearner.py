@@ -211,10 +211,12 @@ def RPSLearner(X, y, **kwargs):
     # Collect y_true and y_probs
     y_true = np.concatenate([res[0] for res in results])
     y_probs = np.concatenate([res[1] for res in results])
-
+    
     # Compute metrics
     print("Evaluating model performance...")
     metrics = evaluate_models_predict(y_true, y_probs)
 
+    y_labels = np.max(y_probs, axis=1)
+
     print("Metrics:", metrics)
-    return metrics, y_label, y_probs
+    return metrics, y_probs, y_labels
