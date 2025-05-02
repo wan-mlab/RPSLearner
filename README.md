@@ -1,4 +1,4 @@
-# RPSLearner: A novel approach combining Random Projection and Stacking Learning for categorizing NSCLC
+# RPSLearner: A novel approach combining <ins>R</ins>andom <ins>P</ins>rojection and <ins>S</ins>tacking <ins>Learn</ins>ing for categorizing NSCLC
 
 Combining Random Projection and Stacking learning methods for lung cancer subtypes prediction based on RNA-seq data extracted from TCGA database.
 
