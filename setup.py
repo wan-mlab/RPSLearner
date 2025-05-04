@@ -15,10 +15,15 @@ setup(
     include_package_data=True,
     install_requires=[
         "scikit-learn>=1.2.1",
-        "scipy>=1.7.3"
+        "scipy>=1.7.3",
+        "xgboost>=1.7.0",
+        "torch>=1.0",
     ],
     classifiers=[
+        "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.8",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence"
     ],
     python_requires=">=3.8"
 )
