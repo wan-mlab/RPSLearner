@@ -13,6 +13,15 @@ In this study, to address the concerns in NSCLC subtype prediction, we developed
 - [Publication](#Publication)
 
 ## Installation
+1. Clone the RPSLearner git repository
+```bash
+git clone https://github.com/wan-mlab/RPSLearner.git
+```
+2. Navigate to the directory of RPSLearner package
+```bash
+cd /your path/RPSLearner
+pip install .
+```
 
 ## Tutorials
 How to use the method for RNA-seq data
