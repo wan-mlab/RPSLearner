@@ -216,7 +216,7 @@ def RPSLearner(X, y, **kwargs):
     print("Evaluating model performance...")
     metrics = evaluate_models_predict(y_true, y_probs)
 
-    y_labels = np.max(y_probs, axis=1)
+    y_labels = np.argmax(y_probs, axis=1)
 
     print("Metrics:", metrics)
     return metrics, y_probs, y_labels
