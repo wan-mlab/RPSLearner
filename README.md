@@ -43,6 +43,14 @@ metrics, y_probs, y_labels = RPSLearner(
     tpm.values, subtype, n_jobs=5)
 ```
 
+## Analysis reproduce
+- `cor_plot.ipynb` could generate the correlation comparison analysis among dimensionality reduction algorithms.
+- `RanBALL_test.py` could generate the comparison vs. score average 
+- `base_vs_stack.py` could generate stacking vs. individual base model
+- `pipeline.py` could generate the benchmarking results against State-Of-The-Art methods
+- `DE_analysis.ipynb` could generate the differential expression comparison and GO pathway analysis.
+- `drug_disease_gene.ipynb` could reproduce the gene-drug-disease interaction analysis for drug-repurposing.
+
 ## Bug Report
 If you find any bugs or problems, or you have any comments on RPSLearner, please don't hesitate to contact via email xwu@unmc.edu
 
