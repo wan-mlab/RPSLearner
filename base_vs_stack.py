@@ -1,3 +1,11 @@
+"""
+Comparison of Base Models vs Stacked Models
+===========================================
+
+This module provides functions to compare base machine learning models with stacked models
+using cross-validation and various evaluation metrics.
+"""
+
 import numpy as np
 import pandas as pd
 
@@ -9,12 +17,31 @@ from sklearn.random_projection import GaussianRandomProjection
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, matthews_corrcoef, roc_auc_score
 from joblib import Parallel, delayed
 
-from model import get_knn_model, get_rf_model, get_extra_trees_model, get_lightGBM_model, get_catboost_model, get_xgb_model, get_svm_model
-from model import SimpleNNClassifier, RandomProjectionReducer, MetaStacker
+# Import models from the model module
+from model import (
+    get_knn_model, get_rf_model, get_extra_trees_model, 
+    get_lightGBM_model, get_catboost_model, get_xgb_model, get_svm_model,
+    SimpleNNClassifier, RandomProjectionReducer, MetaStacker
+)
+
+
+# =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
 
 def data_normalization(X):
     """
-    This function normalizes the data using z-score normalization.
+    Normalize data using z-score normalization.
+    
+    Parameters
+    ----------
+    X : array-like
+        Input data to normalize
+        
+    Returns
+    -------
+    array-like
+        Normalized data
     """
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
@@ -22,6 +49,23 @@ def data_normalization(X):
 
 
 def evaluate_models_predict(y_true, y_probs, threshold=0.5):
+    """
+    Evaluate model predictions using various metrics.
+    
+    Parameters
+    ----------
+    y_true : array-like
+        True labels
+    y_probs : array-like
+        Predicted probabilities
+    threshold : float, default=0.5
+        Threshold for converting probabilities to binary predictions
+        
+    Returns
+    -------
+    dict
+        Dictionary of evaluation metrics
+    """
     y_pred = (y_probs > threshold).astype(int)
 
     metrics = {
@@ -33,6 +77,92 @@ def evaluate_models_predict(y_true, y_probs, threshold=0.5):
         'AUC': roc_auc_score(y_true, y_probs, average='weighted')
     }
     return metrics
+
+
+# =============================================================================
+# HELPER FUNCTIONS FOR MODEL PROCESSING
+# =============================================================================
+
+def _apply_transformers(X_train, X_test, transformers):
+    """
+    Apply random projection transformers to training and test data.
+    
+    Parameters
+    ----------
+    X_train : array-like
+        Training data
+    X_test : array-like
+        Test data
+    transformers : list or None
+        List of transformers to apply
+        
+    Returns
+    -------
+    tuple
+        Transformed training and test data
+    """
+    if transformers is not None:
+        X_train_list = []
+        X_test_list = []
+        for transformer in transformers:
+            X_train_list.append(transformer.fit_transform(X_train))
+            X_test_list.append(transformer.transform(X_test))
+        X_train_transformed = np.concatenate(X_train_list, axis=1)
+        X_test_transformed = np.concatenate(X_test_list, axis=1)
+    else:
+        X_train_transformed = X_train
+        X_test_transformed = X_test
+        
+    return X_train_transformed, X_test_transformed
+
+
+def _get_meta_model(meta_model_choice, input_dim_for_meta, base_models_count, 
+                   hidden_layers=4, passthrough=True):
+    """
+    Create and return the appropriate meta model.
+    
+    Parameters
+    ----------
+    meta_model_choice : str
+        Type of meta model to create ('nn', 'rf', 'svm', 'lr')
+    input_dim_for_meta : int
+        Input dimension for meta model
+    base_models_count : int
+        Number of base models
+    hidden_layers : int, default=4
+        Number of hidden layers for neural network meta model
+    passthrough : bool, default=True
+        Whether to pass original features to meta model
+        
+    Returns
+    -------
+    estimator
+        Meta model instance
+    """
+    if meta_model_choice == "nn":
+        # If passthrough=True, the meta input is (base outputs + raw features).
+        meta_input_dim = base_models_count + input_dim_for_meta if passthrough else base_models_count
+        return MetaStacker(
+            input_dim=meta_input_dim,
+            output_dim=1,
+            epochs=1000,
+            batch_size=64,
+            learning_rate=1e-4,
+            hidden_layers=hidden_layers
+        )
+    elif meta_model_choice == "rf":
+        return get_rf_model(criterion="gini")
+    elif meta_model_choice == "svm":
+        return get_svm_model(kernel="rbf")
+    elif meta_model_choice == "lr":
+        return LogisticRegression()
+    else:
+        raise ValueError(f"Unknown meta model choice: {meta_model_choice}")
+
+
+# =============================================================================
+# MAIN PROCESSING FUNCTIONS
+# =============================================================================
 
 def process_fold(
     fold_id,
@@ -47,22 +177,15 @@ def process_fold(
     inner_cv,
     passthrough
 ):
+    """
+    Process a single fold of cross-validation for base vs meta model comparison.
+    """
     X_train, X_test = X[train_idx], X[test_idx]
     y_train, y_test = y[train_idx], y[test_idx]
 
     # Apply random projection transforms, if available
-    if transformers is not None:
-        X_train_list = []
-        X_test_list = []
-        for transformer in transformers:
-            X_train_list.append(transformer.fit_transform(X_train))
-            X_test_list.append(transformer.transform(X_test))
-        X_train_transformed = np.concatenate(X_train_list, axis=1)
-        X_test_transformed = np.concatenate(X_test_list, axis=1)
-    else:
-        X_train_transformed = X_train
-        X_test_transformed = X_test
-
+    X_train_transformed, X_test_transformed = _apply_transformers(X_train, X_test, transformers)
+    
     input_dim = X_train_transformed.shape[1]
 
     # Add a neural network as a base model
@@ -85,30 +208,14 @@ def process_fold(
         y_probs_base = estimator.predict_proba(X_test_transformed)[:, 1]
         fold_predictions[model_name] = y_probs_base
 
-    def get_meta_model(input_dim_for_meta):
-        if meta_model_choice == "nn":
-            # If passthrough=True, the meta input is (base outputs + raw features).
-            meta_input_dim = len(local_base_models) + input_dim_for_meta if passthrough else len(local_base_models)
-            return MetaStacker(
-                input_dim=meta_input_dim,
-                output_dim=1,
-                epochs=1000,
-                batch_size=64,
-                learning_rate=1e-4,
-                hidden_layers=hidden_layers
-            )
-        elif meta_model_choice == "rf":
-            return get_rf_model(criterion="gini")
-        elif meta_model_choice == "svm":
-            return get_svm_model(kernel="rbf")
-        elif meta_model_choice == "lr":
-            return LogisticRegression()
-        else:
-            raise ValueError(f"Unknown meta model choice: {meta_model_choice}")
+    meta_model = _get_meta_model(
+        meta_model_choice, 
+        input_dim, 
+        len(local_base_models), 
+        hidden_layers, 
+        passthrough
+    )
 
-    meta_model = get_meta_model(input_dim)
-
-    from sklearn.ensemble import StackingClassifier
     stacking_clf = StackingClassifier(
         estimators=local_base_models,
         final_estimator=meta_model,
@@ -125,6 +232,64 @@ def process_fold(
 
     return fold_predictions
 
+
+def process_fold_combination(
+    fold_id,
+    train_idx,
+    test_idx,
+    X,
+    y,
+    base_models,
+    transformers,
+    meta_model_choice,
+    hidden_layers,
+    inner_cv,
+    passthrough
+):
+    """
+    Process a single fold for base model combination comparison.
+    """
+    X_train, X_test = X[train_idx], X[test_idx]
+    y_train, y_test = y[train_idx], y[test_idx]
+
+    # Apply random projection transforms, if available
+    X_train_transformed, X_test_transformed = _apply_transformers(X_train, X_test, transformers)
+    
+    input_dim = X_train_transformed.shape[1]
+
+    # Collect per-fold metrics here
+    fold_predictions = {}
+
+    meta_model = _get_meta_model(
+        meta_model_choice, 
+        input_dim, 
+        len(base_models), 
+        hidden_layers, 
+        passthrough
+    )
+
+    stacking_clf = StackingClassifier(
+        estimators=base_models,
+        final_estimator=meta_model,
+        passthrough=passthrough,
+        cv=inner_cv,
+        n_jobs=5  # parallel inside stacking (base models in cross-val)
+    )
+
+    stacking_clf.fit(X_train_transformed, y_train)
+    y_probs_meta = stacking_clf.predict_proba(X_test_transformed)[:, 1]
+
+    combination_size = len(base_models)
+    fold_predictions["model_name"] = f"meta_{meta_model_choice}_{combination_size}"
+    fold_predictions[f"meta_{meta_model_choice}_{combination_size}"] = y_probs_meta
+    fold_predictions["test_indices"] = test_idx
+
+    return fold_predictions
+
+
+# =============================================================================
+# MAIN COMPARISON FUNCTIONS
+# =============================================================================
 
 def compare_base_models_vs_meta_parallel(
     X,
@@ -145,6 +310,42 @@ def compare_base_models_vs_meta_parallel(
     """
     Compare base models vs. meta-model with optional random projections,
     using joblib to parallelize the *outer* folds.
+    
+    Parameters
+    ----------
+    X : array-like
+        Input features
+    y : array-like
+        Target labels
+    n_splits : int, default=5
+        Number of cross-validation folds
+    random_state : int, default=42
+        Random state for reproducibility
+    use_RP : bool, default=True
+        Whether to use random projection
+    k : int, default=20
+        Number of random projections
+    n_components : int, default=200
+        Number of components for random projection
+    seedn : int, default=42
+        Starting seed for random projections
+    SSSE : bool, default=False
+        Whether to use SSSE
+    meta_model_choice : str, default="nn"
+        Type of meta model to use
+    hidden_layers : int, default=4
+        Number of hidden layers for neural network
+    inner_cv : int, default=5
+        Number of inner cross-validation folds
+    passthrough : bool, default=True
+        Whether to pass original features to meta model
+    n_jobs_outer : int, default=-1
+        Number of CPU cores for parallelizing folds
+        
+    Returns
+    -------
+    pandas.DataFrame
+        Results dataframe with metrics for each model
     """
     X = np.log1p(X)
     label_mapping = {"LUAD": 0, "LUSC": 1}
@@ -237,83 +438,6 @@ def compare_base_models_vs_meta_parallel(
     return results_df
 
 
-def process_fold_combination(
-    fold_id,
-    train_idx,
-    test_idx,
-    X,
-    y,
-    base_models,
-    transformers,
-    meta_model_choice,
-    hidden_layers,
-    inner_cv,
-    passthrough
-):
-    X_train, X_test = X[train_idx], X[test_idx]
-    y_train, y_test = y[train_idx], y[test_idx]
-
-    # Apply random projection transforms, if available
-    if transformers is not None:
-        X_train_list = []
-        X_test_list = []
-        for transformer in transformers:
-            X_train_list.append(transformer.fit_transform(X_train))
-            X_test_list.append(transformer.transform(X_test))
-        X_train_transformed = np.concatenate(X_train_list, axis=1)
-        X_test_transformed = np.concatenate(X_test_list, axis=1)
-    else:
-        X_train_transformed = X_train
-        X_test_transformed = X_test
-
-    input_dim = X_train_transformed.shape[1]
-
-    # Collect per-fold metrics here
-    fold_predictions = {}
-
-    def get_meta_model(input_dim_for_meta):
-        if meta_model_choice == "nn":
-            # If passthrough=True, the meta input is (base outputs + raw features).
-            meta_input_dim = len(base_models) + input_dim_for_meta if passthrough else len(base_models)
-            return MetaStacker(
-                input_dim=meta_input_dim,
-                output_dim=1,
-                epochs=1000,
-                batch_size=64,
-                learning_rate=1e-4,
-                hidden_layers=hidden_layers
-            )
-        elif meta_model_choice == "rf":
-            return get_rf_model(criterion="gini")
-        elif meta_model_choice == "svm":
-            return get_svm_model(kernel="rbf")
-        elif meta_model_choice == "lr":
-            return LogisticRegression()
-        else:
-            raise ValueError(f"Unknown meta model choice: {meta_model_choice}")
-
-    meta_model = get_meta_model(input_dim)
-
-    from sklearn.ensemble import StackingClassifier
-    stacking_clf = StackingClassifier(
-        estimators=base_models,
-        final_estimator=meta_model,
-        passthrough=passthrough,
-        cv=inner_cv,
-        n_jobs=5  # parallel inside stacking (base models in cross-val)
-    )
-
-    stacking_clf.fit(X_train_transformed, y_train)
-    y_probs_meta = stacking_clf.predict_proba(X_test_transformed)[:, 1]
-
-    combination_size = len(base_models)
-    fold_predictions["model_name"] = f"meta_{meta_model_choice}_{combination_size}"
-    fold_predictions[f"meta_{meta_model_choice}_{combination_size}"] = y_probs_meta
-    fold_predictions["test_indices"] = test_idx
-
-    return fold_predictions
-
-
 def composite_compare_base_models(
     X,
     y,
@@ -330,6 +454,45 @@ def composite_compare_base_models(
     passthrough=True,
     n_jobs_outer=-1  # number of CPU cores for parallelizing folds
 ):
+    """
+    Compare combinations of base models for stacking.
+    
+    Parameters
+    ----------
+    X : array-like
+        Input features
+    y : array-like
+        Target labels
+    n_splits : int, default=5
+        Number of cross-validation folds
+    random_state : int, default=42
+        Random state for reproducibility
+    use_RP : bool, default=True
+        Whether to use random projection
+    k : int, default=20
+        Number of random projections
+    n_components : int, default=200
+        Number of components for random projection
+    seedn : int, default=42
+        Starting seed for random projections
+    SSSE : bool, default=False
+        Whether to use SSSE
+    meta_model_choice : str, default="nn"
+        Type of meta model to use
+    hidden_layers : int, default=4
+        Number of hidden layers for neural network
+    inner_cv : int, default=5
+        Number of inner cross-validation folds
+    passthrough : bool, default=True
+        Whether to pass original features to meta model
+    n_jobs_outer : int, default=-1
+        Number of CPU cores for parallelizing folds
+        
+    Returns
+    -------
+    pandas.DataFrame
+        Results dataframe with metrics for each model combination
+    """
     # Compare base models combination
     X = np.log1p(X)
     label_mapping = {"LUAD": 0, "LUSC": 1}
