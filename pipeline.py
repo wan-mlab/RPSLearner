@@ -282,13 +282,13 @@ def train_and_evaluate(X, y, **kwargs):
 
 
 def train_and_evaluate_lasso(X, y, **kwargs):
-    if kwargs.get('log_transform', False):
-        X = np.log1p(X)
 
     if kwargs.get('normalize', False):
         print("Normalizing data...")
         scaler = StandardScaler()
         X = scaler.fit_transform(X)
+    if kwargs.get('log_transform', False):
+        X = np.log1p(X)
     
     label_mapping = {"LUAD": 0, "LUSC": 1}
     y = pd.Series(y).map(label_mapping).values
@@ -654,13 +654,15 @@ def train_and_evaluate_xgboost_ensemble(X, y, **kwargs):
         X: Features
         y: Labels
     """
+    if kwargs.get('normalize', False):
+        print("Normalizing data...")
+        X = data_normalization(X)
+
     # log-transform the data
     if kwargs.get('log_transform', True):
         X = np.log1p(X)
     
-    if kwargs.get('normalize', False):
-        print("Normalizing data...")
-        X = data_normalization(X)
+
     
     # one-hot encoding for categorical variables
     label_mapping = {"LUAD": 0, "LUSC": 1}
@@ -754,12 +756,11 @@ def train_and_evaluate_ag_stacking(X, y, **kwargs):
         X: Features
         y: Labels
     """
-    if kwargs.get('log_transform', True):
-        X = np.log1p(X)
-
     if kwargs.get('normalize', False):
         X = data_normalization(X)
-
+        
+    if kwargs.get('log_transform', True):
+        X = np.log1p(X)
     # Random Projection
     n_RP = kwargs.get('n_RP', 5)
     SSSE = kwargs.get('SSSE', True)
@@ -870,15 +871,15 @@ def train_and_evaluate_ag_stacking(X, y, **kwargs):
 
 
 def train_ag_stacking(X, y, **kwargs):
-    # Log-transform the data if specified
-    if kwargs.get('log_transform', True):
-        print("Applying log-transform to the data...")
-        X = np.log1p(X)
-
     # Normalize the data using z-score normalization if specified
     if kwargs.get('normalize', False):
         print("Normalizing the data using z-score normalization...")
         X = data_normalization(X)
+
+    # Log-transform the data if specified
+    if kwargs.get('log_transform', True):
+        print("Applying log-transform to the data...")
+        X = np.log1p(X)
 
     # Reset index and ensure y is a DataFrame with the correct column name
     y_df = y.reset_index(drop=True)
@@ -980,10 +981,11 @@ def rp_xgboost_ensemble_fold_processing(train_index, test_index, X, y, kwargs):
 def train_and_evaluate_rp_xgboost_ensemble(X, y, **kwargs):
     # from multiprocessing import Pool
     from joblib import Parallel, delayed
-    # log-transform the data
-    X = np.log1p(X)
     if kwargs.get('normalize', False):
         X = data_normalization(X)
+    # log-transform the data
+    X = np.log1p(X)
+
     # one-hot encoding for categorical variables
     label_mapping = {"LUAD": 0, "LUSC": 1}
     y = y.map(label_mapping)
@@ -1034,10 +1036,12 @@ def train_and_evaluate_xgboost(X, y, **kwargs):
     """
     Train and evaluate models using xgboost.
     """
-    X = np.log1p(X)
     if kwargs.get('normalize', False):
         print("Normalizing data...")
         X = data_normalization(X)
+
+    X = np.log1p(X)
+
     # one-hot encoding for categorical variables
     label_mapping = {"LUAD": 0, "LUSC": 1}
     y = y.map(label_mapping)
@@ -1124,13 +1128,13 @@ def individual_base_model_evaluation_fold_processing(fold_id, train_index, test_
     return y_true_full, y_proba_full
 
 def individual_base_model_evaluation(X, y, **kwargs):
-    if kwargs.get('log_transform', True):
-        print("Applying log-transform...")
-        X = np.log1p(X)
-
     if kwargs.get('normalize', False):
         print("Normalizing data...")
         X = data_normalization(X)
+
+    if kwargs.get('log_transform', True):
+        print("Applying log-transform...")
+        X = np.log1p(X)
 
     label_mapping = {"LUAD": 0, "LUSC": 1}
     y = y.map(label_mapping)
